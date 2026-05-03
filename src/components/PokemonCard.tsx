@@ -23,7 +23,7 @@ export const PokemonCard = ({ pokemon, isFavorite, onToggleFavorite, onClick }: 
       onClick={onClick}
       className="relative group cursor-pointer h-full"
     >
-      <div className="relative h-full bg-[#121212] border border-white/5 rounded-3xl p-5 overflow-hidden transition-all duration-300 group-hover:border-white/20 flex flex-col">
+      <div className="relative h-full bg-[#121212] border border-white/5 rounded-2xl p-3 md:p-4 overflow-hidden transition-all duration-300 group-hover:border-white/20 flex flex-col">
         <button 
           onClick={(e) => {
             e.stopPropagation();

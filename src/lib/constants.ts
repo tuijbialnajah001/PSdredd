@@ -20,12 +20,15 @@ export const POKI_TYPE_COLORS: Record<string, string> = {
 };
 
 export const formatPrice = (price: number) => {
-  return price.toLocaleString();
+  return `${price}M`;
 };
 
 export const calculatePrice = (pokemon: any) => {
-  // Deterministic price based on stats for the UI
-  const basePrice = pokemon.base_experience || 50;
   const statTotal = pokemon.stats?.reduce((acc: number, stat: any) => acc + stat.base_stat, 0) || 300;
-  return Math.floor((basePrice * statTotal) / 10);
+  
+  // Normalize stats (range ~150 to ~700) to a price between 100 and 400
+  let price = 100 + ((statTotal - 150) / 550) * 300;
+  
+  // Clamp and round off to a 3-digit number (max 400)
+  return Math.max(100, Math.min(400, Math.round(price)));
 };
