@@ -29,6 +29,6 @@ export const calculatePrice = (pokemon: any) => {
   // Normalize stats (range ~150 to ~700) to a price between 100 and 400
   let price = 100 + ((statTotal - 150) / 550) * 300;
   
-  // Clamp and round off to a 3-digit number (max 400)
-  return Math.max(100, Math.min(400, Math.round(price)));
+  // Clamp and round off to the nearest 10 (max 400)
+  return Math.max(100, Math.min(400, Math.round(price / 10) * 10));
 };

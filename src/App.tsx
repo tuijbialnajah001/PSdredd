@@ -3,14 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { PokemonCard } from './components/PokemonCard';
 import { SearchBar } from './components/SearchBar';
 import { fetchPokemonList, fetchPokemonDetails } from './lib/api';
+import { POKEMON_ORDER_BY_STATS } from './lib/pokemonOrder';
 
 export default function App() {
   const [pokemons, setPokemons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const limit = 16;
+  const [hasMore, setHasMore] = useState(true);
+
   const [activeTab, setActiveTab] = useState('Explore');
   const [searchResult, setSearchResult] = useState<any | null>(null);
   const [isSearching, setIsSearching] = useState(false);
@@ -23,6 +29,20 @@ export default function App() {
     }
   });
 
+  const observer = useRef<IntersectionObserver | null>(null);
+  const lastPokemonElementRef = useCallback((node: HTMLDivElement) => {
+    if (loading || loadingMore || activeTab !== 'Explore' || isSearching) return;
+    if (observer.current) observer.current.disconnect();
+    
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore) {
+        setOffset(prevOffset => prevOffset + limit);
+      }
+    });
+    
+    if (node) observer.current.observe(node);
+  }, [loading, loadingMore, hasMore, activeTab, isSearching]);
+
   useEffect(() => {
     localStorage.setItem('poke-favorites', JSON.stringify(favorites));
   }, [favorites]);
@@ -31,8 +51,9 @@ export default function App() {
     const loadData = async () => {
       setLoading(true);
       try {
-        const data = await fetchPokemonList(16, 0); // Load initial batch
+        const data = await fetchPokemonList(limit, 0); // Load initial batch
         setPokemons(data);
+        setHasMore(data.length === limit);
       } catch (error) {
         console.error("Failed to fetch pokemons", error);
       }
@@ -41,6 +62,28 @@ export default function App() {
 
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (offset === 0) return; // Ignore initial load
+    
+    const loadMoreData = async () => {
+      setLoadingMore(true);
+      try {
+        const data = await fetchPokemonList(limit, offset);
+        if (data.length > 0) {
+           setPokemons(prev => [...prev, ...data]);
+        }
+        setHasMore(offset + limit < POKEMON_ORDER_BY_STATS.length);
+      } catch (error) {
+        console.error("Failed to fetch more pokemons", error);
+      }
+      setLoadingMore(false);
+    };
+
+    if (activeTab === 'Explore' && !isSearching) {
+       loadMoreData();
+    }
+  }, [offset, activeTab, isSearching]);
 
   const handleToggleFavorite = (pokemon: any) => {
     setFavorites(prev => {
@@ -75,8 +118,42 @@ export default function App() {
 
   const displayedPokemons = searchResult ? searchResult : (activeTab === 'Favorites' ? favorites : pokemons);
 
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+
+  // the required distance between touchStart and touchEnd to be detected as a swipe
+  const minSwipeDistance = 50; 
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+
+    if (isLeftSwipe && activeTab === 'Explore') {
+      setActiveTab('Favorites');
+    }
+    if (isRightSwipe && activeTab === 'Favorites') {
+      setActiveTab('Explore');
+    }
+  };
+
   return (
-    <div className="max-w-[1280px] mx-auto px-4 md:px-8 pt-4 pb-12 min-h-[100vh]">
+    <div 
+      className="max-w-[1280px] mx-auto px-4 md:px-8 pt-4 pb-12 min-h-[100vh]"
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+    >
       {/* Header */}
       <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-8 relative pt-24 md:pt-20">
         <div className="text-center md:text-left">
@@ -122,16 +199,38 @@ export default function App() {
             <p className="text-sm">Start exploring to build your collection.</p>
          </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-4 lg:gap-6 relative z-10">
-          {displayedPokemons.map((pokemon) => (
-            <PokemonCard 
-              key={pokemon.id} 
-              pokemon={pokemon} 
-              isFavorite={favorites.some(fav => fav.id === pokemon.id)}
-              onToggleFavorite={() => handleToggleFavorite(pokemon)}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-4 lg:gap-6 relative z-10">
+            {displayedPokemons.map((pokemon, index) => {
+              if (displayedPokemons.length === index + 1) {
+                return (
+                  <div ref={lastPokemonElementRef} key={pokemon.id}>
+                    <PokemonCard 
+                      pokemon={pokemon} 
+                      isFavorite={favorites.some(fav => fav.id === pokemon.id)}
+                      onToggleFavorite={() => handleToggleFavorite(pokemon)}
+                    />
+                  </div>
+                );
+              } else {
+                return (
+                  <div key={pokemon.id}>
+                    <PokemonCard 
+                      pokemon={pokemon} 
+                      isFavorite={favorites.some(fav => fav.id === pokemon.id)}
+                      onToggleFavorite={() => handleToggleFavorite(pokemon)}
+                    />
+                  </div>
+                );
+              }
+            })}
+          </div>
+          {loadingMore && (
+            <div className="flex justify-center items-center py-10">
+               <div className="w-8 h-8 border-4 border-white/5 border-t-[var(--gold)] rounded-full animate-spin"></div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
