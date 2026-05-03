@@ -55,9 +55,8 @@ export default function App() {
     <div className="max-w-[1100px] mx-auto px-8 pt-12 pb-32 min-h-[100vh]">
       {/* Header */}
       <div className="text-center mb-16 relative pt-8">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] md:w-[400px] md:h-[400px] bg-[var(--gold)]/5 rounded-full blur-[80px] pointer-events-none transform-gpu" />
         <h1 className="relative font-['Righteous'] text-5xl md:text-6xl mb-4 tracking-wider">
-          EXPLORE <span className="text-[var(--gold)] drop-shadow-[0_0_15px_rgba(201,168,76,0.2)]">POKEMON</span>
+          EXPLORE <span className="text-[var(--gold)]">POKEMON</span>
         </h1>
         <div className="flex items-center justify-center gap-4">
           <div className="h-px w-12 md:w-24 bg-gradient-to-r from-transparent to-[var(--gold)] opacity-50" />
@@ -67,15 +66,15 @@ export default function App() {
       </div>
 
       {/* Floating Curved Filter Button */}
-      <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 bg-[#121212]/80 backdrop-blur-xl border border-white/10 p-1.5 flex gap-1 shadow-[0_10px_40px_rgba(0,0,0,0.5)] items-center rounded-full transform-gpu">
+      <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 bg-[#121212]/95 border border-white/10 p-1.5 flex gap-1 shadow-2xl items-center rounded-full transform-gpu">
         {['Explore', 'Favorites'].map((tab) => (
           <button 
             key={tab} 
             onClick={() => setActiveTab(tab)}
-            className={`px-8 py-3 rounded-full text-[0.65rem] md:text-xs font-bold uppercase tracking-widest transition-all duration-300 will-change-transform ${
+            className={`px-8 py-3 rounded-full text-[0.65rem] md:text-xs font-bold uppercase tracking-widest transition-all duration-300 ${
               activeTab === tab 
-                ? 'bg-white/10 text-white shadow-[0_0_20px_rgba(255,255,255,0.05)] scale-100' 
-                : 'text-[var(--muted)] hover:text-white/90 hover:bg-white/5 transparent scale-95'
+                ? 'bg-white/10 text-white scale-100 border border-white/5' 
+                : 'text-[var(--muted)] hover:text-white/90 hover:bg-white/5 transparent scale-95 border border-transparent'
             }`}
           >
             {tab}

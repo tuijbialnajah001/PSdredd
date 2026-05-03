@@ -19,32 +19,28 @@ export const PokemonCard = ({ pokemon, isFavorite, onToggleFavorite, onClick }: 
       whileHover={{ y: -5, scale: 1.02 }}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, ease: 'easeOut' }}
+      transition={{ duration: 0.2, ease: 'easeOut' }}
       onClick={onClick}
-      className="relative group cursor-pointer h-full will-change-transform"
+      className="relative group cursor-pointer h-full"
     >
-      <div 
-        className="absolute inset-0 rounded-3xl opacity-0 blur-xl transition-opacity duration-300 group-hover:opacity-30 will-change-opacity pointer-events-none"
-        style={{ backgroundColor: color }}
-      />
-      <div className="relative h-full bg-[#121212] border border-white/10 rounded-3xl p-5 overflow-hidden transition-all duration-300 group-hover:border-white/30 flex flex-col transform-gpu">
+      <div className="relative h-full bg-[#121212] border border-white/5 rounded-3xl p-5 overflow-hidden transition-all duration-300 group-hover:border-white/20 flex flex-col">
         <button 
           onClick={(e) => {
             e.stopPropagation();
             if (onToggleFavorite) onToggleFavorite();
           }}
-          className="absolute top-4 right-4 z-30 p-2 rounded-full bg-black/20 backdrop-blur-md border border-white/10 hover:bg-white/20 transition-all duration-300 group/btn"
+          className="absolute top-4 right-4 z-30 p-2 rounded-full bg-[#1a1a1a] border border-white/5 hover:bg-white/10 transition-all duration-300 group/btn"
         >
           <Heart 
-            className={`w-4 h-4 transition-all duration-300 ${
+            className={`w-4 h-4 transition-transform duration-300 ${
               isFavorite 
-                ? 'fill-[var(--gold)] text-[var(--gold)] scale-110 drop-shadow-[0_0_5px_rgba(201,168,76,0.5)]' 
+                ? 'fill-[var(--gold)] text-[var(--gold)] scale-110' 
                 : 'text-white/50 group-hover/btn:text-white'
             }`} 
           />
         </button>
         <div 
-          className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/5 to-transparent rounded-bl-full -mr-10 -mt-10 transition-transform duration-500 group-hover:scale-110 pointer-events-none" 
+          className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/5 to-transparent rounded-bl-full -mr-10 -mt-10 transition-transform duration-500 group-hover:scale-110 pointer-events-none opacity-50" 
           style={{ backgroundColor: `${color}10` }}
         />
         
@@ -72,7 +68,7 @@ export const PokemonCard = ({ pokemon, isFavorite, onToggleFavorite, onClick }: 
               alt={pokemon.name} 
               loading="lazy"
               decoding="async"
-              className="transition-transform duration-500 group-hover:scale-110 group-hover:-translate-y-2 object-contain h-full w-full drop-shadow-lg will-change-transform" 
+              className="transition-transform duration-300 group-hover:scale-110 group-hover:-translate-y-2 object-contain h-full w-full" 
             />
           </div>
 
