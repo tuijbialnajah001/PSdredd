@@ -6,6 +6,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { PokemonCard } from './components/PokemonCard';
 import { SearchBar } from './components/SearchBar';
+import { FeedbackButton } from './components/FeedbackButton';
 import { fetchPokemonList, fetchPokemonDetails } from './lib/api';
 import { POKEMON_ORDER_BY_STATS } from './lib/pokemonOrder';
 
@@ -187,6 +188,8 @@ export default function App() {
           </button>
         ))}
       </div>
+
+      <FeedbackButton />
 
       {/* Grid container */}
       {loading ? (
