@@ -1,6 +1,6 @@
 import { Heart } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, TouchEvent } from 'react';
 import { POKI_TYPE_COLORS, formatPrice, calculatePrice } from '../lib/constants';
 
 interface PokemonCardProps {
@@ -10,24 +10,81 @@ interface PokemonCardProps {
   onClick?: () => void;
 }
 
-const STAT_LABELS = ['HP', 'ATK', 'DEF', 'SPA', 'SPD', 'SPE'];
+const STAT_LABELS = ['HEALTH', 'ATTACK', 'DEFENSE', 'SP. ATK', 'SP. DEF', 'SPEED'];
 
 export const PokemonCard = ({ pokemon, isFavorite, onToggleFavorite, onClick }: PokemonCardProps) => {
   const [isFlipped, setIsFlipped] = useState(false);
+  const [imageIndex, setImageIndex] = useState(0);
   
-  const primaryType = pokemon.types[0].type.name;
-  const color = POKI_TYPE_COLORS[primaryType] || '#777';
-  const imgUrl = pokemon.sprites.other['official-artwork'].front_default || pokemon.sprites.front_default;
+  // Map over pokemon.varieties to show actual pokemon forms (Mega, GMax, etc.)
+  const availableVariants = useMemo(() => {
+    if (pokemon.varieties && pokemon.varieties.length > 0) {
+      return pokemon.varieties.map((v: any) => {
+        const segments = v.url.split('/').filter(Boolean);
+        const id = segments[segments.length - 1];
+        const imageUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
+        
+        let formattedName = v.name.replace(/-/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+        
+        return {
+          id,
+          url: imageUrl,
+          name: formattedName
+        };
+      });
+    }
+    
+    // Fallback if no varieties are fetched yet
+    return [{ 
+      id: pokemon.id,
+      url: pokemon.sprites?.other?.['official-artwork']?.front_default || pokemon.sprites?.front_default, 
+      name: pokemon.name.replace(/-/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) 
+    }];
+  }, [pokemon.varieties, pokemon.sprites, pokemon.name, pokemon.id]);
+
+  const currentVariant = availableVariants[imageIndex] || availableVariants[0];
+  const currentImgUrl = currentVariant.url;
+  const currentVariantName = currentVariant.name;
+
+  const [variantDetails, setVariantDetails] = useState<Record<string, any>>({});
 
   useEffect(() => {
-    let timeout: NodeJS.Timeout;
-    if (isFlipped) {
-      timeout = setTimeout(() => {
-        setIsFlipped(false);
-      }, 3500);
+    if (currentVariant && currentVariant.id && currentVariant.id.toString() !== pokemon.id.toString() && !variantDetails[currentVariant.id]) {
+      fetch(`https://pokeapi.co/api/v2/pokemon/${currentVariant.id}/`)
+        .then(res => res.json())
+        .then(data => {
+          setVariantDetails(prev => ({...prev, [currentVariant.id]: data}));
+        })
+        .catch(console.error);
     }
-    return () => clearTimeout(timeout);
-  }, [isFlipped]);
+  }, [currentVariant, pokemon.id, variantDetails]);
+
+  const activePokemon = currentVariant?.id && currentVariant.id.toString() !== pokemon.id.toString() && variantDetails[currentVariant.id] 
+    ? variantDetails[currentVariant.id] 
+    : pokemon;
+
+  const primaryType = activePokemon.types[0].type.name;
+  const color = POKI_TYPE_COLORS[primaryType] || '#777';
+
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+
+  const handleTouchStart = (e: TouchEvent) => {
+    setTouchStartX(e.touches[0].clientX);
+  };
+
+  const handleTouchEnd = (e: TouchEvent) => {
+    if (touchStartX === null) return;
+    const touchEndX = e.changedTouches[0].clientX;
+    const distance = touchStartX - touchEndX;
+    const minSwipeDistance = 30;
+
+    if (distance > minSwipeDistance) {
+      setImageIndex((prev) => (prev + 1) % availableVariants.length);
+    } else if (distance < -minSwipeDistance) {
+      setImageIndex((prev) => (prev - 1 + availableVariants.length) % availableVariants.length);
+    }
+    setTouchStartX(null);
+  };
 
   return (
     <motion.div
@@ -36,7 +93,7 @@ export const PokemonCard = ({ pokemon, isFavorite, onToggleFavorite, onClick }: 
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
       onClick={onClick}
-      onDoubleClick={() => setIsFlipped(true)}
+      onDoubleClick={() => setIsFlipped(!isFlipped)}
       className="relative group cursor-pointer h-[320px] md:h-[350px]"
       style={{ perspective: 1000 }}
     >
@@ -74,7 +131,7 @@ export const PokemonCard = ({ pokemon, isFavorite, onToggleFavorite, onClick }: 
           <div className="relative z-10 flex flex-col items-center flex-1 h-full pt-1">
             <div className="w-full flex justify-between items-start mb-2">
               <div className="flex gap-1 flex-wrap">
-                {pokemon.types.map((t: any) => (
+                {activePokemon.types.map((t: any) => (
                   <span 
                     key={t.type.name} 
                     className="text-[0.55rem] px-2 py-0.5 rounded text-white font-bold uppercase tracking-wider shadow-sm" 
@@ -85,28 +142,60 @@ export const PokemonCard = ({ pokemon, isFavorite, onToggleFavorite, onClick }: 
                 ))}
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[0.6rem] font-mono text-[var(--muted)] opacity-50">#{pokemon.id.toString().padStart(3, '0')}</span>
+                <span className="text-[0.6rem] font-mono text-[var(--muted)] opacity-50">#{activePokemon.id.toString().padStart(3, '0')}</span>
               </div>
             </div>
 
-            <div className="w-full mb-4 relative flex items-center justify-center flex-1 min-h-0">
+            <div 
+              className="w-full mb-4 relative flex items-center justify-center flex-1 min-h-0"
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+            >
               <img 
-                src={imgUrl} 
-                alt={pokemon.name} 
+                src={currentImgUrl} 
+                alt={currentVariantName} 
                 loading="lazy"
                 decoding="async"
+                onError={(e) => {
+                  if (currentVariant.id) {
+                    (e.target as HTMLImageElement).src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${currentVariant.id}.png`;
+                  }
+                }}
                 className="transition-transform duration-300 group-hover:scale-110 object-contain h-[120px] md:h-[140px] w-full" 
               />
+              
+              {/* Variant Pagination Dots / Text */}
+              {availableVariants.length > 1 && (
+                <div className="absolute bottom-0 flex gap-1 justify-center w-full max-w-[80%] flex-wrap overflow-hidden h-2 opacity-50 hover:opacity-100 transition-opacity">
+                  {availableVariants.length <= 15 ? availableVariants.map((_, i) => (
+                    <div 
+                      key={i} 
+                      className={`w-1.5 h-1.5 rounded-full transition-all duration-300 shrink-0 ${i === imageIndex ? 'bg-white scale-125' : 'bg-white/30'}`}
+                    />
+                  )) : (
+                    <div className="text-[0.6rem] text-white/70 font-mono tracking-wider -mt-1 font-bold">
+                       {imageIndex + 1} / {availableVariants.length}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
-            <h4 className="font-['Righteous'] text-xl md:text-2xl tracking-wider text-white mb-1 transition-colors text-center capitalize shrink-0">
-              {pokemon.name}
-            </h4>
+            <div className="flex flex-col items-center justify-center shrink-0 mb-1 w-full px-2">
+              <h4 className="font-['Righteous'] text-lg md:text-xl tracking-wider text-white transition-colors text-center capitalize max-h-14 overflow-hidden">
+                {currentVariantName}
+              </h4>
+              {availableVariants.length > 1 && (
+                <div className="text-[0.55rem] md:text-[0.6rem] text-[var(--muted)]/60 tracking-widest uppercase text-center mt-0.5">
+                  Swipe for {availableVariants.length - 1} more form{availableVariants.length > 2 ? 's' : ''}
+                </div>
+              )}
+            </div>
             
             <div className="mt-auto w-full pt-3 md:pt-4 border-t border-white/5 flex justify-between items-center shrink-0">
               <div className="text-[0.55rem] uppercase tracking-widest text-[var(--muted)]">Market Price</div>
               <div className="font-['Righteous'] text-base md:text-lg text-[var(--gold)] tracking-wide transition-transform group-hover:scale-105 origin-right duration-300">
-                🪙 {formatPrice(calculatePrice(pokemon))}
+                🪙 {formatPrice(calculatePrice(activePokemon, imageIndex, currentVariantName))}
               </div>
             </div>
           </div>
@@ -125,7 +214,7 @@ export const PokemonCard = ({ pokemon, isFavorite, onToggleFavorite, onClick }: 
           </h4>
           
           <div className="flex-1 flex flex-col justify-center gap-3 md:gap-4 relative z-10 w-full px-2">
-            {pokemon.stats?.slice(0, 6).map((stat: any, index: number) => {
+            {activePokemon.stats?.slice(0, 6).map((stat: any, index: number) => {
               const label = STAT_LABELS[index] || 'STAT';
               const val = stat.base_stat || 0;
               const maxVal = 255;
@@ -133,7 +222,7 @@ export const PokemonCard = ({ pokemon, isFavorite, onToggleFavorite, onClick }: 
               
               return (
                 <div key={index} className="flex items-center gap-3">
-                  <div className="text-[0.6rem] md:text-[0.65rem] font-bold text-white/50 w-8 md:w-10 tracking-wider">
+                  <div className="text-[0.55rem] md:text-[0.6rem] font-bold text-white/50 w-14 md:w-16 tracking-wider shrink-0 truncate">
                     {label}
                   </div>
                   <div className="flex-1 h-1.5 md:h-2 bg-white/5 rounded-full overflow-hidden">
@@ -153,7 +242,7 @@ export const PokemonCard = ({ pokemon, isFavorite, onToggleFavorite, onClick }: 
             })}
           </div>
           <div className="text-[0.55rem] text-center text-white/30 uppercase tracking-widest mt-auto shrink-0 pt-2 pb-1">
-            Double Tap Details
+            Double Tap to Flip
           </div>
         </div>
       </motion.div>

@@ -1,7 +1,7 @@
 import { POKEMON_ORDER_BY_STATS } from './pokemonOrder';
 
-const CACHE_PREFIX = 'poki_cache_';
-const LIST_CACHE_KEY = 'poki_list_cache';
+const CACHE_PREFIX = 'poki_cache_v3_';
+const LIST_CACHE_KEY = 'poki_list_cache_v3';
 
 export const fetchAllPokemonNames = async () => {
   const cacheKey = 'poki_all_names';
@@ -40,22 +40,36 @@ export const fetchPokemonDetails = async (nameOrId: string | number) => {
     if (!res.ok) throw new Error("Pokemon not found");
     const detailData = await res.json();
     
+    let varieties = [{
+      name: detailData.name,
+      url: `https://pokeapi.co/api/v2/pokemon/${detailData.id}/`
+    }];
+
+    try {
+      if (detailData.species?.url) {
+        const speciesRes = await fetch(detailData.species.url);
+        if (speciesRes.ok) {
+          const speciesData = await speciesRes.json();
+          if (speciesData.varieties?.length > 0) {
+            varieties = speciesData.varieties.map((v: any) => ({
+              name: v.pokemon.name,
+              url: v.pokemon.url
+            }));
+          }
+        }
+      }
+    } catch (e) { console.error("Failed to fetch species", e) }
+
     const optimizedData = {
       id: detailData.id,
       name: detailData.name,
       types: detailData.types.map((t: any) => ({
         type: { name: t.type.name }
       })),
-      sprites: {
-        front_default: detailData.sprites.front_default,
-        other: {
-          'official-artwork': {
-            front_default: detailData.sprites.other['official-artwork'].front_default
-          }
-        }
-      },
+      sprites: detailData.sprites,
       base_experience: detailData.base_experience,
-      stats: detailData.stats.map((s: any) => ({ base_stat: s.base_stat }))
+      stats: detailData.stats.map((s: any) => ({ base_stat: s.base_stat })),
+      varieties: varieties
     };
 
     try {

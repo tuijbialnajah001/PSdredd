@@ -119,42 +119,8 @@ export default function App() {
 
   const displayedPokemons = searchResult ? searchResult : (activeTab === 'Favorites' ? favorites : pokemons);
 
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
-
-  // the required distance between touchStart and touchEnd to be detected as a swipe
-  const minSwipeDistance = 50; 
-
-  const onTouchStart = (e: React.TouchEvent) => {
-    setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
-  };
-
-  const onTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX);
-  };
-
-  const onTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
-    const distance = touchStart - touchEnd;
-    const isLeftSwipe = distance > minSwipeDistance;
-    const isRightSwipe = distance < -minSwipeDistance;
-
-    if (isLeftSwipe && activeTab === 'Explore') {
-      setActiveTab('Favorites');
-    }
-    if (isRightSwipe && activeTab === 'Favorites') {
-      setActiveTab('Explore');
-    }
-  };
-
   return (
-    <div 
-      className="max-w-[1280px] mx-auto px-4 md:px-8 pt-4 pb-12 min-h-[100vh]"
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
-    >
+    <div className="max-w-[1280px] mx-auto px-4 md:px-8 pt-4 pb-12 min-h-[100vh]">
       {/* Header */}
       <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-8 relative pt-24 md:pt-20">
         <div className="text-center md:text-left">
