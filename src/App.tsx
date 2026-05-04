@@ -3,12 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { PokemonCard } from './components/PokemonCard';
 import { SearchBar } from './components/SearchBar';
 import { FeedbackButton } from './components/FeedbackButton';
 import { fetchPokemonList, fetchPokemonDetails } from './lib/api';
 import { POKEMON_ORDER_BY_STATS } from './lib/pokemonOrder';
+import { TrendingDown, TrendingUp, RefreshCcw } from 'lucide-react';
 
 export default function App() {
   const [pokemons, setPokemons] = useState<any[]>([]);
@@ -17,6 +18,7 @@ export default function App() {
   const [offset, setOffset] = useState(0);
   const limit = 16;
   const [hasMore, setHasMore] = useState(true);
+  const [sortOrder, setSortOrder] = useState<'default' | 'low' | 'high'>('default');
 
   const [activeTab, setActiveTab] = useState('Explore');
   const [searchResult, setSearchResult] = useState<any | null>(null);
@@ -46,7 +48,7 @@ export default function App() {
 
   const observer = useRef<IntersectionObserver | null>(null);
   const lastPokemonElementRef = useCallback((node: HTMLDivElement) => {
-    if (loading || loadingMore || activeTab !== 'Explore' || isSearching) return;
+    if (loading || loadingMore || activeTab !== 'Explore' || isSearching || sortOrder !== 'default') return;
     if (observer.current) observer.current.disconnect();
     
     observer.current = new IntersectionObserver(entries => {
@@ -56,7 +58,7 @@ export default function App() {
     });
     
     if (node) observer.current.observe(node);
-  }, [loading, loadingMore, hasMore, activeTab, isSearching]);
+  }, [loading, loadingMore, hasMore, activeTab, isSearching, sortOrder]);
 
   useEffect(() => {
     localStorage.setItem('poke-favorites', JSON.stringify(favorites));
@@ -131,7 +133,31 @@ export default function App() {
     setSearchResult(null);
   };
 
-  const displayedPokemons = searchResult ? searchResult : (activeTab === 'Favorites' ? favorites : pokemons);
+  const calculateBST = (stats: any[]) => {
+    return stats?.reduce((acc: number, s: any) => acc + (s.base_stat || 0), 0) || 0;
+  };
+
+  const displayedPokemons = useMemo(() => {
+    let base = searchResult ? searchResult : (activeTab === 'Favorites' ? favorites : pokemons);
+    
+    if (sortOrder === 'default') return base;
+    
+    const sorted = [...base].sort((a, b) => {
+      const bstA = calculateBST(a.stats);
+      const bstB = calculateBST(b.stats);
+      return sortOrder === 'low' ? bstA - bstB : bstB - bstA;
+    });
+    
+    return sorted;
+  }, [searchResult, activeTab, favorites, pokemons, sortOrder]);
+
+  const toggleSort = () => {
+    setSortOrder(prev => {
+      if (prev === 'default') return 'low';
+      if (prev === 'low') return 'high';
+      return 'default';
+    });
+  };
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -166,8 +192,29 @@ export default function App() {
           </div>
         </div>
 
-        <div className="w-full md:w-auto md:min-w-[320px] lg:min-w-[400px]">
-          <SearchBar onSearch={handleSearch} onClear={handleClearSearch} />
+        <div className="w-full md:w-auto md:min-w-[320px] lg:min-w-[400px] flex items-center gap-3">
+          <div className="flex-1">
+            <SearchBar onSearch={handleSearch} onClear={handleClearSearch} />
+          </div>
+          
+          <button 
+            onClick={toggleSort}
+            className={`h-12 w-12 shrink-0 rounded-xl border border-white/5 flex items-center justify-center transition-all duration-300 relative group overflow-hidden ${
+              sortOrder !== 'default' ? 'bg-[var(--gold)]/10 border-[var(--gold)]/30' : 'bg-white/5'
+            }`}
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+            <div className="relative z-10 transition-transform duration-500 group-active:scale-95">
+              {sortOrder === 'default' && <RefreshCcw className="w-5 h-5 text-[var(--muted)] group-hover:text-white" />}
+              {sortOrder === 'low' && <TrendingDown className="w-5 h-5 text-[var(--gold)]" />}
+              {sortOrder === 'high' && <TrendingUp className="w-5 h-5 text-[var(--gold)]" />}
+            </div>
+            
+            <div className="absolute top-1 right-1 pointer-events-none">
+               {sortOrder === 'low' && <span className="text-[8px] text-[var(--gold)] font-bold opacity-60">MIN</span>}
+               {sortOrder === 'high' && <span className="text-[8px] text-[var(--gold)] font-bold opacity-60">MAX</span>}
+            </div>
+          </button>
         </div>
       </div>
 
