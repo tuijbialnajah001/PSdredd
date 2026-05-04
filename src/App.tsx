@@ -29,6 +29,20 @@ export default function App() {
       return [];
     }
   });
+  const visiblePokemonIds = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    const handleVisible = (e: any) => {
+      const { id, visible } = e.detail;
+      if (visible) {
+        visiblePokemonIds.current.add(id);
+      } else {
+        visiblePokemonIds.current.delete(id);
+      }
+    };
+    window.addEventListener('pokemon-visible' as any, handleVisible);
+    return () => window.removeEventListener('pokemon-visible' as any, handleVisible);
+  }, []);
 
   const observer = useRef<IntersectionObserver | null>(null);
   const lastPokemonElementRef = useCallback((node: HTMLDivElement) => {
@@ -118,6 +132,25 @@ export default function App() {
   };
 
   const displayedPokemons = searchResult ? searchResult : (activeTab === 'Favorites' ? favorites : pokemons);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Pick a random pokemon that has variants AND is visible
+      const variantsList = displayedPokemons.filter(p => 
+        p.varieties && 
+        p.varieties.length > 1 && 
+        visiblePokemonIds.current.has(p.id)
+      );
+
+      if (variantsList.length > 0) {
+        const randomPokemon = variantsList[Math.floor(Math.random() * variantsList.length)];
+        const event = new CustomEvent('cycle-pokemon-variant', { detail: { id: randomPokemon.id } });
+        window.dispatchEvent(event);
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [displayedPokemons]);
 
   return (
     <div className="max-w-[1280px] mx-auto px-4 md:px-8 pt-4 pb-12 min-h-[100vh]">

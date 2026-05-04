@@ -16,6 +16,37 @@ export const PokemonCard = ({ pokemon, isFavorite, onToggleFavorite, onClick }: 
   const [isFlipped, setIsFlipped] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [imageIndex, setImageIndex] = useState(0);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsVisible(entry.isIntersecting);
+      },
+      { threshold: 0.1 }
+    );
+
+    const element = document.getElementById(`pokemon-card-${pokemon.id}`);
+    if (element) observer.observe(element);
+
+    return () => {
+      if (element) observer.unobserve(element);
+    };
+  }, [pokemon.id]);
+
+  useEffect(() => {
+    if (isVisible) {
+      const event = new CustomEvent('pokemon-visible', { detail: { id: pokemon.id, visible: true } });
+      window.dispatchEvent(event);
+    } else {
+      const event = new CustomEvent('pokemon-visible', { detail: { id: pokemon.id, visible: false } });
+      window.dispatchEvent(event);
+    }
+    return () => {
+      const event = new CustomEvent('pokemon-visible', { detail: { id: pokemon.id, visible: false } });
+      window.dispatchEvent(event);
+    };
+  }, [isVisible, pokemon.id]);
 
   const handleDoubleClick = () => {
     const newState = !isExpanded;
@@ -23,15 +54,28 @@ export const PokemonCard = ({ pokemon, isFavorite, onToggleFavorite, onClick }: 
     setIsFlipped(newState);
   };
   
+  // Helper to get the best possible image URL for a pokemon object
+  const getPokemonImage = (p: any) => {
+    if (!p) return '';
+    return (
+      p.sprites?.other?.['official-artwork']?.front_default ||
+      p.sprites?.other?.home?.front_default ||
+      p.sprites?.other?.dream_world?.front_default ||
+      p.sprites?.front_default ||
+      `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${p.id}.png`
+    );
+  };
+
   // Map over pokemon.varieties to show actual pokemon forms (Mega, GMax, etc.)
   const availableVariants = useMemo(() => {
     if (pokemon.varieties && pokemon.varieties.length > 0) {
       return pokemon.varieties.map((v: any) => {
         const segments = v.url.split('/').filter(Boolean);
         const id = segments[segments.length - 1];
-        const imageUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
         
-        let formattedName = v.name.replace(/-/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+        // Initial fallback URL
+        const imageUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
+        const formattedName = v.name.replace(/-/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
         
         return {
           id,
@@ -44,25 +88,53 @@ export const PokemonCard = ({ pokemon, isFavorite, onToggleFavorite, onClick }: 
     // Fallback if no varieties are fetched yet
     return [{ 
       id: pokemon.id,
-      url: pokemon.sprites?.other?.['official-artwork']?.front_default || pokemon.sprites?.front_default, 
+      url: getPokemonImage(pokemon),
       name: pokemon.name.replace(/-/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) 
     }];
   }, [pokemon.varieties, pokemon.sprites, pokemon.name, pokemon.id]);
 
-  const currentVariant = availableVariants[imageIndex] || availableVariants[0];
-  const currentImgUrl = currentVariant.url;
-  const currentVariantName = currentVariant.name;
+  useEffect(() => {
+    const handleCycle = (e: any) => {
+      if (e.detail?.id === pokemon.id && !isExpanded) {
+        setImageIndex((prev) => (prev + 1) % availableVariants.length);
+      }
+    };
+
+    window.addEventListener('cycle-pokemon-variant' as any, handleCycle);
+    return () => window.removeEventListener('cycle-pokemon-variant' as any, handleCycle);
+  }, [pokemon.id, availableVariants.length, isExpanded]);
 
   const [variantDetails, setVariantDetails] = useState<Record<string, any>>({});
+  const [isLoadingVariant, setIsLoadingVariant] = useState(false);
+
+  const currentVariant = availableVariants[imageIndex] || availableVariants[0];
+  
+  // Logic to determine the best image URL for the current selection
+  const currentImgUrl = useMemo(() => {
+    const details = variantDetails[currentVariant.id];
+    // If we have full details for this variety, use its official sprites
+    if (details) return getPokemonImage(details);
+    // Otherwise use the initial variant URL
+    return currentVariant.url;
+  }, [currentVariant, variantDetails]);
+
+  const currentVariantName = currentVariant.name;
 
   useEffect(() => {
     if (currentVariant && currentVariant.id && currentVariant.id.toString() !== pokemon.id.toString() && !variantDetails[currentVariant.id]) {
+      setIsLoadingVariant(true);
       fetch(`https://pokeapi.co/api/v2/pokemon/${currentVariant.id}/`)
         .then(res => res.json())
         .then(data => {
           setVariantDetails(prev => ({...prev, [currentVariant.id]: data}));
+          setIsLoadingVariant(false);
         })
-        .catch(console.error);
+        .catch(err => {
+          console.error(err);
+          setIsLoadingVariant(false);
+        });
+    } else {
+      setIsLoadingVariant(false);
     }
   }, [currentVariant, pokemon.id, variantDetails]);
 
@@ -107,7 +179,7 @@ export const PokemonCard = ({ pokemon, isFavorite, onToggleFavorite, onClick }: 
         )}
       </AnimatePresence>
 
-      <div className="relative h-[320px] md:h-[350px] w-full">
+      <div id={`pokemon-card-${pokemon.id}`} className="relative h-[320px] md:h-[350px] w-full">
         <motion.div
           layout
           whileHover={!isExpanded ? { y: -5, scale: 1.02 } : undefined}
@@ -193,8 +265,13 @@ export const PokemonCard = ({ pokemon, isFavorite, onToggleFavorite, onClick }: 
                 loading="lazy"
                 decoding="async"
                 onError={(e) => {
-                  if (currentVariant.id) {
-                    (e.target as HTMLImageElement).src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${currentVariant.id}.png`;
+                  const target = e.target as HTMLImageElement;
+                  if (target.src.includes('official-artwork')) {
+                    target.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/home/${currentVariant.id}.png`;
+                  } else if (target.src.includes('home')) {
+                    target.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${currentVariant.id}.png`;
+                  } else if (target.src.includes('sprites/pokemon/') && !target.src.includes('shiny')) {
+                    target.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/shiny/${currentVariant.id}.png`;
                   }
                 }}
                 className={`transition-transform duration-300 group-hover:scale-110 object-contain w-full ${isExpanded ? 'h-[200px] md:h-[250px]' : 'h-[120px] md:h-[140px]'}`} 
@@ -239,7 +316,7 @@ export const PokemonCard = ({ pokemon, isFavorite, onToggleFavorite, onClick }: 
 
         {/* BACK */}
         <div 
-          className="absolute inset-0 bg-[#0A0A0A] border border-[var(--gold)]/30 rounded-2xl flex flex-col overflow-hidden shadow-2xl"
+          className="absolute inset-0 bg-[#0A0A0A] border border-[var(--gold)]/30 rounded-2xl flex flex-col overflow-hidden shadow-2xl pointer-events-auto"
           style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)', boxShadow: isExpanded ? `0 25px 50px -12px ${color}40` : `0 4px 20px -2px ${color}20` }}
         >
           {/* Subtle Color Glow */}
@@ -273,6 +350,14 @@ export const PokemonCard = ({ pokemon, isFavorite, onToggleFavorite, onClick }: 
                   <img 
                     src={currentImgUrl} 
                     alt={currentVariantName} 
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      if (target.src.includes('official-artwork')) {
+                        target.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/home/${currentVariant.id}.png`;
+                      } else if (target.src.includes('home')) {
+                        target.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${currentVariant.id}.png`;
+                      }
+                    }}
                     className="w-32 h-32 md:w-56 md:h-56 object-contain drop-shadow-2xl mb-2 mt-6 md:mt-0 max-h-[30vh]" 
                   />
                   <h4 className="font-['Righteous'] text-2xl md:text-4xl text-white capitalize text-center">
@@ -284,10 +369,10 @@ export const PokemonCard = ({ pokemon, isFavorite, onToggleFavorite, onClick }: 
                </div>
 
                {/* Right Section: Content (Variants + Stats) */}
-               <div className="flex-[1.5] p-4 md:px-8 md:py-6 flex flex-col overflow-hidden">
+               <div className="flex-[1.5] p-4 md:px-8 md:py-6 flex flex-col overflow-hidden relative z-20">
                   {/* Variants / Forms (Now at the top of this section) */}
                   {availableVariants.length > 1 && (
-                    <div className="mb-6 shrink-0">
+                    <div className="mb-6 shrink-0 relative z-30">
                       <div className="text-[0.65rem] text-[var(--muted)] tracking-[0.2em] uppercase mb-3 text-center md:text-left flex items-center gap-2">
                         <span className="w-8 h-[1px] bg-white/10 hidden md:block" />
                         Available Forms ({availableVariants.length})
@@ -296,30 +381,48 @@ export const PokemonCard = ({ pokemon, isFavorite, onToggleFavorite, onClick }: 
                         className="flex gap-3 overflow-x-auto pb-2 scrollbar-none snap-x"
                         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                       >
-                        {availableVariants.map((v, i) => (
-                          <button 
-                            key={i} 
-                            onClick={(e) => { e.stopPropagation(); setImageIndex(i); }}
-                            className={`relative overflow-hidden rounded-xl border-2 transition-all p-1 md:p-1.5 shrink-0 bg-[#121212] snap-center group/variant ${
-                              i === imageIndex 
-                                ? 'border-[var(--gold)] scale-110 shadow-[0_0_20px_rgba(255,215,0,0.15)] z-10' 
-                                : 'border-white/5 opacity-40 hover:opacity-100 hover:bg-white/5 hover:border-white/20'
-                            }`}
-                          >
-                            <img src={v.url} className="w-10 h-10 md:w-14 md:h-14 object-contain" />
-                          </button>
-                        ))}
+                        {availableVariants.map((v, i) => {
+                          const details = variantDetails[v.id];
+                          const thumbUrl = details ? getPokemonImage(details) : v.url;
+                          
+                          return (
+                            <button 
+                              key={i} 
+                              onPointerDown={(e) => { 
+                                e.preventDefault();
+                                e.stopPropagation(); 
+                                setImageIndex(i); 
+                              }}
+                              className={`relative overflow-hidden rounded-xl border-2 transition-all p-1 md:p-1.5 shrink-0 bg-[#121212] snap-center group/variant cursor-pointer pointer-events-auto active:scale-95 ${
+                                i === imageIndex 
+                                  ? 'border-[var(--gold)] scale-110 shadow-[0_0_20px_rgba(255,215,0,0.3)] z-10' 
+                                  : 'border-white/5 opacity-40 hover:opacity-100 hover:bg-white/5 hover:border-white/20'
+                              }`}
+                            >
+                              <img 
+                                src={thumbUrl} 
+                                className="w-10 h-10 md:w-14 md:h-14 object-contain pointer-events-none" 
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement;
+                                  if (target.src.includes('official-artwork')) {
+                                    target.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${v.id}.png`;
+                                  }
+                                }}
+                              />
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
 
                   {/* Stats Section */}
-                  <div className="flex-1 flex flex-col min-h-0">
+                  <div className={`flex-1 flex flex-col min-h-0 transition-opacity duration-300 ${isLoadingVariant ? 'opacity-50' : 'opacity-100'}`}>
                     <h4 className="font-['Righteous'] tracking-[0.2em] text-[var(--gold)] mb-4 md:mb-6 text-sm md:text-base text-center md:text-left flex items-center gap-2">
                       <span className="w-8 h-[1px] bg-[var(--gold)]/30 hidden md:block" />
-                      BASE STATS
+                      {isLoadingVariant ? 'LOADING STATS...' : 'BASE STATS'}
                     </h4>
-                    <div className="flex flex-col gap-3 md:gap-5 w-full overflow-y-auto pr-2 scrollbar-thin">
+                    <div className="flex flex-col gap-3 md:gap-4 w-full overflow-y-auto pr-2 scrollbar-thin">
                       {activePokemon.stats?.slice(0, 6).map((stat: any, index: number) => {
                         const label = STAT_LABELS[index] || 'STAT';
                         const val = stat.base_stat || 0;
