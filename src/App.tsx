@@ -169,7 +169,7 @@ export default function App() {
          </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-4 lg:gap-6 relative z-10">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-4 lg:gap-6 relative">
             {displayedPokemons.map((pokemon, index) => {
               if (displayedPokemons.length === index + 1) {
                 return (
